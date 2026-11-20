@@ -7,6 +7,10 @@ on:
         description: Publish the current Cargo.toml version to crates.io
         type: boolean
         default: false
+      artifact_run_id:
+        description: Publish a GitHub Release from an existing tag build's Actions run ID
+        type: string
+        required: false
   push:
     tags: ['v*']
 
@@ -15,6 +19,7 @@ permissions:
 
 jobs:
   validation:
+    if: ${{ !inputs.artifact_run_id }}
     uses: ./.github/workflows/ci.yml
 
   check:
@@ -74,7 +79,7 @@ jobs:
   publish:
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish)
+      (github.event_name == 'workflow_dispatch' && inputs.publish && !inputs.artifact_run_id)
     needs: bundle
     runs-on: ubuntu-26.04
     environment: release
@@ -85,3 +90,61 @@ jobs:
       - run: cargo publish --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  github-release:
+    needs: bundle
+    if: >-
+      !cancelled() &&
+      ((github.event_name == 'push' && needs.bundle.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.artifact_run_id != ''))
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Resolve the release tag
+        id: tag
+        env:
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id || github.run_id }}
+        run: |
+          [[ "$ARTIFACT_RUN_ID" =~ ^[0-9]+$ ]]
+          run=$(gh api "repos/$GH_REPO/actions/runs/$ARTIFACT_RUN_ID")
+          jq -e '.event == "push" and (.path | split("@")[0]) == ".github/workflows/release-check.yml"' <<< "$run"
+          tag=$(jq -r '.head_branch' <<< "$run")
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          commit=$(gh api "repos/$GH_REPO/commits/$tag" --jq .sha)
+          [[ "$commit" == "$(jq -r '.head_sha' <<< "$run")" ]]
+          echo "name=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v6
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          pattern: paintrs-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish binaries for the tag
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+        working-directory: release-assets
+        run: |
+          stem="paintrs-${TAG#v}"
+          assets=()
+          for platform in linux-x86_64 windows-x86_64 macos-aarch64 macos-x86_64; do
+            suffix=tar.gz
+            if [[ "$platform" == windows-* ]]; then suffix=zip; fi
+            archive="$stem-$platform.$suffix"
+            [[ "$(sha256sum "$archive")" == "$(<"$archive.sha256")" ]]
+            assets+=("$archive" "$archive.sha256")
+          done
+          if existing=$(gh release view "$TAG" --json assets --jq '.assets[].name'); then
+            missing=()
+            for asset in "${assets[@]}"; do
+              if ! grep -Fxq "$asset" <<< "$existing"; then missing+=("$asset"); fi
+            done
+            if (( ${#missing[@]} )); then gh release upload "$TAG" "${missing[@]}"; fi
+          else
+            gh release create "$TAG" --verify-tag --generate-notes -- "${assets[@]}"
+          fi
