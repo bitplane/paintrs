@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - run: bash scripts/check.sh
+      - name: Install desktop test dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y xvfb xauth x11-utils libxkbcommon-x11-0
+      - run: cargo build --locked
+      - name: Open Paintrs on X11
+        run: env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET xvfb-run -a bash scripts/smoke-desktop.sh
