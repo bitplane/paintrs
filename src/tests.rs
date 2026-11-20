@@ -220,3 +220,12 @@ fn formats_round_trip_and_indexed_bitmaps_keep_the_requested_depth() {
     assert_eq!(page.dimensions(), (792.0, 612.0));
     assert!(files::pdf(&bitmap, &page).unwrap().ends_with(b"%%EOF\n"));
 }
+
+#[test]
+fn clipboard_png_preserves_a_free_form_selection_mask() {
+    let mut selection = Bitmap::new(8, 5, HOLE);
+    selection.fill(r(2, 1, 3, 3), 0x225577);
+    let payload = files::encode_clipboard(&selection).unwrap();
+    assert_eq!(files::decode_clipboard(&payload).unwrap(), selection);
+    assert_eq!(files::decode(&payload).unwrap().get(p(0, 0)), WHITE);
+}

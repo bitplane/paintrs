@@ -1,4 +1,7 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod app;
+mod desktop;
 mod editor;
 mod files;
 mod raster;
@@ -24,6 +27,8 @@ struct Platform {
     size: PhysicalSize<u32>,
     title: String,
     full_screen: bool,
+    #[cfg(target_os = "macos")]
+    resize: Option<MacResize>,
 }
 
 impl Platform {
@@ -79,6 +84,8 @@ impl Platform {
             size,
             title,
             full_screen: false,
+            #[cfg(target_os = "macos")]
+            resize: None,
         })
     }
 
@@ -137,13 +144,69 @@ impl Platform {
                     let _ = self.window.drag_window();
                 }
                 WindowAction::Resize(direction) => {
+                    #[cfg(not(target_os = "macos"))]
                     let _ = self.window.drag_resize_window(direction);
+                    #[cfg(target_os = "macos")]
+                    {
+                        self.resize = MacResize::start(&self.window, direction);
+                    }
                 }
                 WindowAction::Minimize => self.window.set_minimized(true),
                 WindowAction::Maximize => self.window.set_maximized(!self.window.is_maximized()),
                 WindowAction::Exit => event_loop.exit(),
             }
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+struct MacResize {
+    direction: winit::window::ResizeDirection,
+    origin: winit::dpi::LogicalPosition<f64>,
+    size: winit::dpi::LogicalSize<f64>,
+    start: (f64, f64),
+}
+
+#[cfg(target_os = "macos")]
+impl MacResize {
+    fn pointer() -> (f64, f64) {
+        // AppKit reports screen coordinates with an upward-pointing y axis.
+        let location = unsafe { objc2_app_kit::NSEvent::mouseLocation() };
+        (location.x, -location.y)
+    }
+
+    fn start(window: &Window, direction: winit::window::ResizeDirection) -> Option<Self> {
+        let dpi = window.scale_factor();
+        Some(Self {
+            direction,
+            origin: window.outer_position().ok()?.to_logical(dpi),
+            size: window.inner_size().to_logical(dpi),
+            start: Self::pointer(),
+        })
+    }
+
+    fn update(&self, window: &Window, ui_scale: u32) {
+        use winit::dpi::{LogicalPosition, LogicalSize};
+        use winit::window::ResizeDirection::*;
+        let (x, y) = Self::pointer();
+        let (dx, dy) = (x - self.start.0, y - self.start.1);
+        let (mut width, mut height) = (self.size.width, self.size.height);
+        let (mut left, mut top) = (self.origin.x, self.origin.y);
+        let minimum = f64::from(ui_scale) / window.scale_factor();
+        if matches!(self.direction, East | NorthEast | SouthEast) {
+            width = (width + dx).max(600.0 * minimum);
+        } else if matches!(self.direction, West | NorthWest | SouthWest) {
+            width = (width - dx).max(600.0 * minimum);
+            left += self.size.width - width;
+        }
+        if matches!(self.direction, South | SouthWest | SouthEast) {
+            height = (height + dy).max(475.0 * minimum);
+        } else if matches!(self.direction, North | NorthWest | NorthEast) {
+            height = (height - dy).max(475.0 * minimum);
+            top += self.size.height - height;
+        }
+        let _ = window.request_inner_size(LogicalSize::new(width, height));
+        window.set_outer_position(LogicalPosition::new(left, top));
     }
 }
 
@@ -191,10 +254,18 @@ impl ApplicationHandler for Desktop {
                 self.app.focused = focus;
                 if !focus {
                     self.app.lost_focus();
+                    #[cfg(target_os = "macos")]
+                    {
+                        platform.resize = None;
+                    }
                 }
             }
             WindowEvent::CloseRequested => self.app.invoke(app::Command::Exit),
             WindowEvent::CursorMoved { position, .. } => {
+                #[cfg(target_os = "macos")]
+                if let Some(resize) = &platform.resize {
+                    resize.update(&platform.window, platform.scale);
+                }
                 let scale = f64::from(platform.scale);
                 self.app.pointer_moved(p(
                     (position.x / scale).floor() as i32,
@@ -212,7 +283,13 @@ impl ApplicationHandler for Desktop {
                 let right = button == MouseButton::Right;
                 match state {
                     ElementState::Pressed => self.app.pointer_down(right),
-                    ElementState::Released => self.app.pointer_up(right),
+                    ElementState::Released => {
+                        self.app.pointer_up(right);
+                        #[cfg(target_os = "macos")]
+                        if !right {
+                            platform.resize = None;
+                        }
+                    }
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
@@ -286,7 +363,14 @@ fn run() -> Result<(), String> {
     if args.next().is_some() {
         return Err("Usage: paintrs [IMAGE]".into());
     }
-    let event_loop = EventLoop::new().map_err(|error| error.to_string())?;
+    let mut builder = EventLoop::builder();
+    #[cfg(target_os = "macos")]
+    {
+        use winit::platform::macos::EventLoopBuilderExtMacOS;
+        // Keep quit routed through Paint's unsaved-changes prompt.
+        builder.with_default_menu(false);
+    }
+    let event_loop = builder.build().map_err(|error| error.to_string())?;
     let mut app = Paint::new();
     if let Some(path) = path {
         app.open_initial(PathBuf::from(path));
@@ -305,6 +389,8 @@ fn run() -> Result<(), String> {
 fn main() {
     if let Err(error) = run() {
         eprintln!("Paintrs: {error}");
+        #[cfg(all(windows, not(debug_assertions)))]
+        desktop::startup_error(&error);
         std::process::exit(1);
     }
 }

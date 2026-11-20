@@ -1,7 +1,5 @@
 use fontdue::{Font, FontSettings};
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 
 pub type Color = u32;
 pub const BLACK: Color = 0x000000;
@@ -499,30 +497,40 @@ impl Fonts {
     }
     pub fn new() -> Self {
         let mut fonts = HashMap::new();
-        for (family, name) in [
-            (Family::Sans, "Sans"),
-            (Family::Serif, "Serif"),
-            (Family::Mono, "Mono"),
+        for (family, faces) in [
+            (
+                Family::Sans,
+                [
+                    include_bytes!("../assets/LiberationSans-Regular.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationSans-Bold.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationSans-Italic.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationSans-BoldItalic.ttf").as_slice(),
+                ],
+            ),
+            (
+                Family::Serif,
+                [
+                    include_bytes!("../assets/LiberationSerif-Regular.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationSerif-Bold.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationSerif-Italic.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationSerif-BoldItalic.ttf").as_slice(),
+                ],
+            ),
+            (
+                Family::Mono,
+                [
+                    include_bytes!("../assets/LiberationMono-Regular.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationMono-Bold.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationMono-Italic.ttf").as_slice(),
+                    include_bytes!("../assets/LiberationMono-BoldItalic.ttf").as_slice(),
+                ],
+            ),
         ] {
-            for (bold, italic, style) in [
-                (false, false, "Regular"),
-                (true, false, "Bold"),
-                (false, true, "Italic"),
-                (true, true, "BoldItalic"),
-            ] {
-                let local =
-                    format!("/usr/share/fonts/truetype/liberation/Liberation{name}-{style}.ttf");
-                let alt = Path::new("/usr/share/fonts/truetype/liberation2")
-                    .join(format!("Liberation{name}-{style}.ttf"));
-                let bytes = fs::read(local)
-                    .or_else(|_| fs::read(alt))
-                    .unwrap_or_else(|_| {
-                        if bold {
-                            include_bytes!("../assets/LiberationSans-Bold.ttf").to_vec()
-                        } else {
-                            include_bytes!("../assets/LiberationSans-Regular.ttf").to_vec()
-                        }
-                    });
+            for ((bold, italic), bytes) in
+                [(false, false), (true, false), (false, true), (true, true)]
+                    .into_iter()
+                    .zip(faces)
+            {
                 fonts.insert(
                     (family, bold, italic),
                     Font::from_bytes(bytes, FontSettings::default()).expect("Liberation font"),

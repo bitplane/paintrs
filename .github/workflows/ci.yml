@@ -21,3 +21,16 @@ jobs:
       - run: cargo build --locked
       - name: Open Paintrs on X11
         run: env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET xvfb-run -a bash scripts/smoke-desktop.sh
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked --all-targets

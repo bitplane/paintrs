@@ -5,7 +5,9 @@ edition = "2024"
 rust-version = "1.88"
 description = "A native Rust bitmap editor with a Windows 98-inspired interface"
 readme = "README.md"
-include = ["/src/**", "/assets/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE"]
+repository = "https://github.com/bitplane/paintrs"
+license = "MIT OR Apache-2.0"
+include = ["/src/**", "/assets/**", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE-MIT", "/LICENSE-APACHE"]
 keywords = ["paint", "bitmap", "drawing", "retro"]
 categories = ["graphics", "gui"]
 
@@ -15,3 +17,12 @@ fontdue = "0.9.3"
 image = { version = "0.25.10", default-features = false, features = ["bmp", "png", "ico", "jpeg", "gif", "tiff"] }
 softbuffer = { version = "0.4.8", default-features = false, features = ["x11", "x11-dlopen", "wayland", "wayland-dlopen"] }
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+dirs = "6"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.5.2"
+objc2-app-kit = { version = "0.2.2", default-features = false, features = ["NSEvent", "NSPasteboard", "NSScreen", "NSWorkspace"] }
+objc2-foundation = { version = "0.2.2", default-features = false, features = ["NSData", "NSDictionary", "NSError", "NSString", "NSURL"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Gdi", "Win32_Graphics_Printing", "Win32_Storage_Xps", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Registry", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

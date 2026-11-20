@@ -1,3 +1,4 @@
+use crate::desktop;
 use crate::editor::{Editor, TextMove, Tool};
 use crate::files::{self, Format, Page};
 use crate::raster::*;
@@ -285,9 +286,9 @@ impl FileBox {
     fn path_for(&self, raw: &str) -> PathBuf {
         let raw = PathBuf::from(raw.trim());
         if let Ok(rest) = raw.strip_prefix("~")
-            && let Some(home) = std::env::var_os("HOME")
+            && let Some(home) = dirs::home_dir()
         {
-            return PathBuf::from(home).join(rest);
+            return home.join(rest);
         }
         self.folder.join(raw)
     }
@@ -409,7 +410,7 @@ pub struct Paint {
 impl Paint {
     pub fn new() -> Self {
         let now = Instant::now();
-        let recent_file = files::data_dir().map(|dir| dir.join("recent"));
+        let recent_file = desktop::data_dir().map(|dir| dir.join("recent"));
         Self {
             editor: Editor::new(),
             fonts: Fonts::new(),
@@ -834,7 +835,7 @@ impl Paint {
                     && (1..=999).contains(&copies)
                 {
                     self.editor.settle(&mut self.fonts);
-                    match files::print(self.editor.bitmap(), &self.page, value(0), copies) {
+                    match desktop::print(self.editor.bitmap(), &self.page, value(0), copies) {
                         Ok(()) => self.set_note("Picture sent to the printer."),
                         Err(message) => {
                             self.error(format!("Could not print the picture.\n{message}"))
@@ -925,14 +926,14 @@ impl Paint {
             Command::Copy | Command::Cut => {
                 self.editor.copy();
                 if let Some(bitmap) = &self.editor.clipboard {
-                    files::clipboard_put(bitmap);
+                    desktop::clipboard_put(bitmap);
                 }
                 if cmd == Command::Cut {
                     self.editor.delete_selection();
                 }
             }
             Command::Paste => {
-                let image = files::clipboard_get().or_else(|| self.editor.clipboard.clone());
+                let image = desktop::clipboard_get().or_else(|| self.editor.clipboard.clone());
                 if let Some(image) = image {
                     self.editor.paste(image, self.origin, &mut self.fonts);
                 } else {
@@ -1316,8 +1317,8 @@ impl Paint {
                     }
                 }
                 Hit::FileHome => {
-                    if let Some(home) = std::env::var_os("HOME") {
-                        dialog.navigate(PathBuf::from(home));
+                    if let Some(home) = dirs::home_dir() {
+                        dialog.navigate(home);
                     }
                 }
                 Hit::FileEntry(index) => {
@@ -1435,7 +1436,7 @@ impl Paint {
             }
             AlertAction::Wallpaper(tiled) => {
                 self.editor.settle(&mut self.fonts);
-                match files::wallpaper(self.editor.bitmap(), tiled) {
+                match desktop::wallpaper(self.editor.bitmap(), tiled) {
                     Ok(()) => self.set_note("Desktop wallpaper updated."),
                     Err(error) => {
                         self.error(format!("Could not update desktop wallpaper.\n{error}"))
@@ -1451,6 +1452,14 @@ impl Paint {
         }
         if self.font_menu.is_some() && *key == Key::Named(NamedKey::Escape) {
             self.font_menu = None;
+            return;
+        }
+        #[cfg(target_os = "macos")]
+        if self.mods.super_key()
+            && let Key::Character(ch) = key
+            && (ch.eq_ignore_ascii_case("q") || ch.eq_ignore_ascii_case("w"))
+        {
+            self.invoke(Command::Exit);
             return;
         }
         if self.dialog.is_some() {
@@ -1479,14 +1488,14 @@ impl Paint {
                             return;
                         }
                         "c" | "x" => {
-                            files::clipboard_text_put(text.selected());
+                            desktop::clipboard_text_put(text.selected());
                             if ch == "x" {
                                 text.insert("");
                             }
                             return;
                         }
                         "v" => {
-                            if let Some(value) = files::clipboard_text_get() {
+                            if let Some(value) = desktop::clipboard_text_get() {
                                 text.insert(&value.replace('\r', ""));
                             }
                             return;
@@ -1688,12 +1697,12 @@ impl Paint {
                     match ch.to_ascii_lowercase().as_str() {
                         "a" => field.select_all(),
                         "v" => {
-                            if let Some(value) = files::clipboard_text_get() {
+                            if let Some(value) = desktop::clipboard_text_get() {
                                 field.insert(value.lines().next().unwrap_or(""));
                             }
                         }
                         "x" | "c" => {
-                            files::clipboard_text_put(&field.value[field.range()]);
+                            desktop::clipboard_text_put(&field.value[field.range()]);
                             if ch.eq_ignore_ascii_case("x") {
                                 field.insert("");
                             }
