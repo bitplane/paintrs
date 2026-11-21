@@ -405,12 +405,22 @@ pub struct Paint {
     scroll_drag: Option<(bool, i32, i32)>,
     next_caret: Instant,
     next_spray: Instant,
+    desktop_integration: bool,
+    clipboard_text: String,
 }
 
 impl Paint {
     pub fn new() -> Self {
+        Self::with_desktop(true)
+    }
+
+    pub(crate) fn with_desktop(desktop_integration: bool) -> Self {
         let now = Instant::now();
-        let recent_file = desktop::data_dir().map(|dir| dir.join("recent"));
+        let recent_file = if desktop_integration {
+            desktop::data_dir().map(|dir| dir.join("recent"))
+        } else {
+            None
+        };
         Self {
             editor: Editor::new(),
             fonts: Fonts::new(),
@@ -459,6 +469,8 @@ impl Paint {
             scroll_drag: None,
             next_caret: now,
             next_spray: now,
+            desktop_integration,
+            clipboard_text: String::new(),
         }
     }
     pub fn title(&self) -> String {
@@ -862,6 +874,24 @@ impl Paint {
         self.constrain_scroll();
     }
     pub fn enabled(&self, cmd: Command) -> bool {
+        if !self.desktop_integration
+            && matches!(
+                cmd,
+                Command::New
+                    | Command::Open
+                    | Command::Recent(_)
+                    | Command::Save
+                    | Command::SaveAs
+                    | Command::CopyTo
+                    | Command::PasteFrom
+                    | Command::ExportPdf
+                    | Command::Print
+                    | Command::Wallpaper(_)
+                    | Command::Exit
+            )
+        {
+            return false;
+        }
         match cmd {
             Command::Undo => self.editor.can_undo(),
             Command::Redo => self.editor.can_redo(),
@@ -925,7 +955,9 @@ impl Paint {
             Command::Redo => self.editor.redo(),
             Command::Copy | Command::Cut => {
                 self.editor.copy();
-                if let Some(bitmap) = &self.editor.clipboard {
+                if self.desktop_integration
+                    && let Some(bitmap) = &self.editor.clipboard
+                {
                     desktop::clipboard_put(bitmap);
                 }
                 if cmd == Command::Cut {
@@ -933,7 +965,12 @@ impl Paint {
                 }
             }
             Command::Paste => {
-                let image = desktop::clipboard_get().or_else(|| self.editor.clipboard.clone());
+                let image = if self.desktop_integration {
+                    desktop::clipboard_get()
+                } else {
+                    None
+                }
+                .or_else(|| self.editor.clipboard.clone());
                 if let Some(image) = image {
                     self.editor.paste(image, self.origin, &mut self.fonts);
                 } else {
@@ -1488,15 +1525,23 @@ impl Paint {
                             return;
                         }
                         "c" | "x" => {
-                            desktop::clipboard_text_put(text.selected());
+                            if self.desktop_integration {
+                                desktop::clipboard_text_put(text.selected());
+                            } else {
+                                self.clipboard_text = text.selected().to_owned();
+                            }
                             if ch == "x" {
                                 text.insert("");
                             }
                             return;
                         }
                         "v" => {
-                            if let Some(value) = desktop::clipboard_text_get() {
-                                text.insert(&value.replace('\r', ""));
+                            if self.desktop_integration {
+                                if let Some(value) = desktop::clipboard_text_get() {
+                                    text.insert(&value.replace('\r', ""));
+                                }
+                            } else {
+                                text.insert(&self.clipboard_text);
                             }
                             return;
                         }
@@ -1691,18 +1736,29 @@ impl Paint {
             }
             return;
         }
-        if let Some(field) = self.focused_field() {
-            if ctrl {
+        if ctrl {
+            let desktop_integration = self.desktop_integration;
+            let mut clipboard = std::mem::take(&mut self.clipboard_text);
+            if let Some(field) = self.focused_field() {
                 if let Key::Character(ch) = key {
                     match ch.to_ascii_lowercase().as_str() {
                         "a" => field.select_all(),
                         "v" => {
-                            if let Some(value) = desktop::clipboard_text_get() {
-                                field.insert(value.lines().next().unwrap_or(""));
+                            if desktop_integration {
+                                if let Some(text) = desktop::clipboard_text_get() {
+                                    field.insert(text.lines().next().unwrap_or(""));
+                                }
+                            } else {
+                                field.insert(clipboard.lines().next().unwrap_or(""));
                             }
                         }
                         "x" | "c" => {
-                            desktop::clipboard_text_put(&field.value[field.range()]);
+                            let value = &field.value[field.range()];
+                            if desktop_integration {
+                                desktop::clipboard_text_put(value);
+                            } else {
+                                clipboard = value.to_owned();
+                            }
                             if ch.eq_ignore_ascii_case("x") {
                                 field.insert("");
                             }
@@ -1710,9 +1766,13 @@ impl Paint {
                         _ => {}
                     }
                 }
+                self.clipboard_text = clipboard;
                 self.sync_color_fields();
                 return;
             }
+            self.clipboard_text = clipboard;
+        }
+        if let Some(field) = self.focused_field() {
             match key {
                 Key::Named(NamedKey::Delete) => field.delete(false),
                 Key::Named(NamedKey::Backspace) => field.delete(true),
