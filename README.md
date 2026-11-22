@@ -2,6 +2,8 @@
 
 An MS Paint clone written in Rust for a demonstration.
 
+![A childlike drawing of a house and garden in Paintrs](assets/screenshot.png)
+
 ```sh
 cargo run --release --locked
 ```
