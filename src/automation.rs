@@ -56,6 +56,16 @@ impl Session {
         }
     }
 
+    /// Press a mouse button with an explicit single- or double-click classification.
+    ///
+    /// Pass `true` for `double_click` to send one press treated as the second press
+    /// of a double-click. This bypasses timing-based classification. Release the
+    /// button with `button(right, false)`.
+    pub fn press(&mut self, right: bool, double_click: bool) {
+        self.paint
+            .pointer_down_with_click(right, Some(double_click));
+    }
+
     /// Scroll by the given number of steps.
     pub fn scroll(&mut self, x: i32, y: i32) {
         self.paint.wheel(x.clamp(-4096, 4096), y.clamp(-4096, 4096));
@@ -175,5 +185,40 @@ mod tests {
                 .unwrap()
                 .starts_with(b"\x89PNG\r\n\x1a\n")
         );
+    }
+
+    #[test]
+    fn explicit_presses_close_a_polygon_without_starting_another() {
+        let mut session = Session::new(1000, 700).unwrap();
+        session
+            .paint
+            .editor
+            .set_tool(crate::editor::Tool::Polygon, &mut session.paint.fonts);
+        session.paint.editor.fill_mode = crate::raster::FillMode::Solid;
+        session.render();
+
+        for (x, y, double) in [
+            (170, 110, false),
+            (280, 110, false),
+            (225, 209, false),
+            (225, 209, true),
+            (340, 110, false),
+            (450, 110, false),
+            (395, 209, true),
+        ] {
+            session.move_pointer(x, y);
+            session.press(false, double);
+            session.button(false, false);
+        }
+        for (x, y) in [(225, 150), (395, 150)] {
+            assert_eq!(
+                session
+                    .paint
+                    .editor
+                    .bitmap()
+                    .get(session.paint.pixel(p(x, y))),
+                BLACK
+            );
+        }
     }
 }

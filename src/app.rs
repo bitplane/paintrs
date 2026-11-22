@@ -1105,6 +1105,10 @@ impl Paint {
         }
     }
     pub fn pointer_down(&mut self, right: bool) {
+        self.pointer_down_with_click(right, None);
+    }
+
+    pub(crate) fn pointer_down_with_click(&mut self, right: bool, explicit_double: Option<bool>) {
         if self.button.is_some() {
             return;
         }
@@ -1119,14 +1123,16 @@ impl Paint {
         };
         let now = Instant::now();
         let q = self.pointer;
-        let double = self.last_click.is_some_and(|(old, a, was_right, before)| {
-            old == hit
-                && was_right == right
-                && now.duration_since(before) < Duration::from_millis(380)
-                && (a.x - q.x).abs() <= 5
-                && (a.y - q.y).abs() <= 5
+        let double = explicit_double.unwrap_or_else(|| {
+            self.last_click.is_some_and(|(old, a, was_right, before)| {
+                old == hit
+                    && was_right == right
+                    && now.duration_since(before) < Duration::from_millis(380)
+                    && (a.x - q.x).abs() <= 5
+                    && (a.y - q.y).abs() <= 5
+            })
         });
-        self.last_click = if double {
+        self.last_click = if explicit_double.is_some() || double {
             None
         } else {
             Some((hit, q, right, now))
