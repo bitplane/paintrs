@@ -231,9 +231,14 @@ impl Bitmap {
                 }
             }
         }
-        if style.fill != FillMode::Solid {
+        if style.fill != FillMode::Solid || points.len() >= 3 {
+            let width = if style.fill == FillMode::Solid {
+                1
+            } else {
+                style.width
+            };
             for (&a, &b) in points.iter().zip(points.iter().cycle().skip(1)) {
-                self.stroke(a, b, style.width, style.ink);
+                self.stroke(a, b, width, style.ink);
             }
         }
     }

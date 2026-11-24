@@ -274,6 +274,30 @@ mod tests {
     }
 
     #[test]
+    fn solid_polygon_includes_the_last_row_and_column() {
+        let mut session = Session::new(1000, 700).unwrap();
+        click(&mut session, 52, 233, false);
+        click(&mut session, 35, 343, false);
+        for (x, y, double) in [
+            (76, 53, false),
+            (795, 53, false),
+            (795, 532, false),
+            (76, 532, true),
+        ] {
+            click(&mut session, x, y, double);
+        }
+        assert!(
+            session
+                .paint
+                .editor
+                .bitmap()
+                .pixels
+                .iter()
+                .all(|&c| c == BLACK)
+        );
+    }
+
+    #[test]
     fn drawing_uses_window_coordinates_and_produces_a_png() {
         let mut session = Session::new(1000, 700).unwrap();
         assert!(!session.paint.enabled(Command::Open));
