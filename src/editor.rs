@@ -291,6 +291,7 @@ pub enum Gesture {
     Resize {
         width: bool,
         height: bool,
+        start: Point,
         size: Point,
     },
 }
@@ -715,10 +716,11 @@ impl Editor {
             && self.draft.is_none()
     }
 
-    pub fn begin_resize(&mut self, width: bool, height: bool) {
+    pub fn begin_resize(&mut self, width: bool, height: bool, start: Point) {
         self.gesture = Some(Gesture::Resize {
             width,
             height,
+            start,
             size: p(self.doc.bitmap.w, self.doc.bitmap.h),
         });
     }
@@ -977,15 +979,16 @@ impl Editor {
             Some(Gesture::Resize {
                 width,
                 height,
+                start,
                 size,
             }) => {
                 let w = if *width {
-                    at.x.clamp(1, MAX_SIDE)
+                    (bounds.w + at.x - start.x).clamp(1, MAX_SIDE)
                 } else {
                     bounds.w
                 };
                 let h = if *height {
-                    at.y.clamp(1, MAX_SIDE)
+                    (bounds.h + at.y - start.y).clamp(1, MAX_SIDE)
                 } else {
                     bounds.h
                 };

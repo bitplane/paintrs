@@ -1271,7 +1271,7 @@ impl Paint {
             }
             Hit::CanvasHandle(w, h) if self.editor.can_resize_canvas() => {
                 self.button = Some(right);
-                self.editor.begin_resize(w, h);
+                self.editor.begin_resize(w, h, self.pixel(q));
             }
             Hit::Canvas => {
                 let pixel = self.pixel(q);

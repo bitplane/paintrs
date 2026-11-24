@@ -313,6 +313,28 @@ mod tests {
     }
 
     #[test]
+    fn canvas_resize_uses_the_drag_distance_from_any_grab_point() {
+        let mut session = Session::new(1000, 700).unwrap();
+        for (x, y, width, height) in [
+            (797, 534, 776, 511),
+            (801, 538, 776, 511),
+            (799, 293, 776, 480),
+            (436, 536, 720, 511),
+        ] {
+            session.move_pointer(x, y);
+            session.press(false, false);
+            session.move_pointer(x + 56, y + 31);
+            session.button(false, false);
+            let bitmap = session.paint.editor.bitmap();
+            assert_eq!((bitmap.w, bitmap.h), (width, height));
+            session.paint.invoke(Command::Undo);
+            session.render();
+            let bitmap = session.paint.editor.bitmap();
+            assert_eq!((bitmap.w, bitmap.h), (720, 480));
+        }
+    }
+
+    #[test]
     fn drawing_uses_window_coordinates_and_produces_a_png() {
         let mut session = Session::new(1000, 700).unwrap();
         assert!(!session.paint.enabled(Command::Open));
