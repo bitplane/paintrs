@@ -699,8 +699,14 @@ impl Editor {
             self.format = Format::Bitmap;
         }
     }
-    pub fn begin_resize(&mut self, width: bool, height: bool, fonts: &mut Fonts) {
-        self.settle(fonts);
+    pub fn can_resize_canvas(&self) -> bool {
+        self.gesture.is_none()
+            && self.selection.is_none()
+            && self.text.is_none()
+            && self.draft.is_none()
+    }
+
+    pub fn begin_resize(&mut self, width: bool, height: bool) {
         self.gesture = Some(Gesture::Resize {
             width,
             height,

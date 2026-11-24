@@ -1097,7 +1097,7 @@ fn canvas(s: &mut Scene, app: &Paint, l: &Layout, bitmap: &Bitmap) {
             s.fill(r(point.x - 1, point.y - 1, 3, 3).intersect(view), LIGHT);
             s.register(mark, Hit::SelectionHandle(dir));
         }
-    } else if app.editor.gesture.is_none() && app.editor.text.is_none() {
+    } else if app.editor.can_resize_canvas() {
         for (at, w, h) in [
             (p(art.right() + 3, art.y + art.h / 2), true, false),
             (p(art.x + art.w / 2, art.bottom() + 3), false, true),
