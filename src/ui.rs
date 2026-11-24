@@ -55,16 +55,10 @@ impl Layout {
         let menu = r(4, 29, frame.w - 8, 20);
         let status_height = i32::from(app.status_bar) * 26;
         let palette_height = i32::from(app.color_box) * 51;
-        let text_height = i32::from(app.editor.tool == Tool::Text && app.text_bar) * 31;
         let status = r(4, frame.h - 4 - status_height, frame.w - 8, status_height);
         let palette = r(4, status.y - palette_height, frame.w - 8, palette_height);
-        let textbar = r(5, 50, frame.w - 10, text_height);
-        let sidebar = r(
-            4,
-            50 + text_height,
-            if app.tool_box { 68 } else { 0 },
-            palette.y - 50 - text_height,
-        );
+        let textbar = r(menu.right() - 310, menu.y + 1, 306, menu.h - 2);
+        let sidebar = r(4, 50, if app.tool_box { 68 } else { 0 }, palette.y - 50);
         let canvas = r(
             sidebar.right() + 2,
             sidebar.y + 1,
@@ -343,20 +337,20 @@ pub fn render(app: &mut Paint, target: &mut Bitmap) {
         if app.color_box {
             palette(&mut scene, app, &layout);
         }
-        if app.editor.tool == Tool::Text && app.text_bar {
-            textbar(&mut scene, app, layout.textbar);
-        }
         if app.status_bar {
             status(&mut scene, app, &layout, hover, hover_pixel);
         }
         if app.thumbnail && app.zoom > 1 {
             thumbnail(&mut scene, &layout, image);
         }
+        if app.editor.tool == Tool::Text && app.text_bar {
+            textbar(&mut scene, app, layout.textbar);
+            if let Some(sizes) = app.font_menu {
+                font_choices(&mut scene, app, layout.textbar, sizes, hover);
+            }
+        }
         if let Some(menu) = app.menu {
             popup(&mut scene, app, menu, hover);
-        }
-        if let Some(sizes) = app.font_menu {
-            font_choices(&mut scene, app, layout.textbar, sizes, hover);
         }
         if let Some(which) = &app.dialog {
             scene.hits.clear();
@@ -856,25 +850,31 @@ fn palette(s: &mut Scene, app: &Paint, l: &Layout) {
     }
 }
 
+fn font_field(bar: Rect, sizes: bool) -> Rect {
+    let (offset, width) = if sizes { (118, 38) } else { (0, 114) };
+    r(bar.x + offset, bar.y, width, bar.h)
+}
+
 fn textbar(s: &mut Scene, app: &Paint, rect: Rect) {
-    s.raised(rect, FACE);
-    let grip = rect.x + 5;
-    s.v(grip, rect.y + 6, rect.h - 12, LIGHT);
-    s.v(grip + 1, rect.y + 6, rect.h - 12, SHADOW);
     let style = app.editor.text_style;
     let family = match style.family {
         Family::Sans => "Liberation Sans",
         Family::Serif => "Liberation Serif",
         Family::Mono => "Liberation Mono",
     };
-    for (x, width, value, hit) in [
-        (rect.x + 15, 153, family.to_string(), Hit::FontFamily),
-        (rect.x + 173, 57, style.size.to_string(), Hit::FontSize),
+    for (sizes, value, hit) in [
+        (false, family.to_string(), Hit::FontFamily),
+        (true, style.size.to_string(), Hit::FontSize),
     ] {
-        let area = r(x, rect.y + 4, width, 23);
+        let area = font_field(rect, sizes);
         s.pressed(area, WHITE);
-        s.text(r(x + 5, area.y, width - 23, area.h), &value, TEXT, NORMAL);
-        let button = r(area.right() - 18, area.y + 2, 16, 19);
+        s.text(
+            r(area.x + 4, area.y, area.w - 20, area.h),
+            &value,
+            TEXT,
+            SMALL,
+        );
+        let button = r(area.right() - 15, area.y + 2, 13, area.h - 4);
         s.raised(button, FACE);
         arrow(s, button, 2, TEXT);
         s.register(area, hit);
@@ -903,7 +903,7 @@ fn textbar(s: &mut Scene, app: &Paint, rect: Rect) {
     .into_iter()
     .enumerate()
     {
-        let area = r(rect.x + 239 + i as i32 * 24, rect.y + 4, 23, 23);
+        let area = r(rect.x + 160 + i as i32 * 21, rect.y, 20, rect.h);
         if on {
             s.pressed(area, MID);
         } else {
@@ -912,7 +912,7 @@ fn textbar(s: &mut Scene, app: &Paint, rect: Rect) {
         s.center(area, label, TEXT, style);
         s.register(area, hit);
     }
-    let inset = r(rect.x + 318, rect.y + 4, 95, 23);
+    let inset = r(rect.x + 227, rect.y, rect.w - 227, rect.h);
     s.button(
         inset,
         if app.editor.opaque {
@@ -942,12 +942,13 @@ fn font_choices(s: &mut Scene, app: &Paint, rect: Rect, sizes: bool, hover: Opti
         .map(|(family, name)| (name.into(), Hit::FontChoice(family), style.family == family))
         .collect()
     };
-    let (x, w) = if sizes {
-        (rect.x + 173, 57)
-    } else {
-        (rect.x + 15, 153)
-    };
-    let bounds = r(x, rect.y + 26, w, choices.len() as i32 * 20 + 4);
+    let field = font_field(rect, sizes);
+    let bounds = r(
+        field.x,
+        field.bottom(),
+        field.w,
+        choices.len() as i32 * 20 + 4,
+    );
     s.pressed(bounds, WHITE);
     for (i, (label, hit, current)) in choices.into_iter().enumerate() {
         let row = r(bounds.x + 2, bounds.y + 2 + i as i32 * 20, bounds.w - 4, 20);

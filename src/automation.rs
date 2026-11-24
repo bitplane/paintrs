@@ -158,7 +158,44 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::Command;
+    use crate::app::{Command, Hit};
+    use crate::editor::Tool;
+
+    fn click(session: &mut Session, x: i32, y: i32, double: bool) {
+        session.move_pointer(x, y);
+        session.press(false, double);
+        session.button(false, false);
+        session.render();
+    }
+
+    #[test]
+    fn text_controls_keep_drawing_targets_fixed_at_minimum_width() {
+        let mut session = Session::new(600, 475).unwrap();
+        let view = session.paint.layout().view;
+        let top_left = view.origin();
+        let polygon = p(52, 233);
+
+        click(&mut session, 52, 179, false);
+        assert_eq!(session.paint.editor.tool, Tool::Text);
+        assert_eq!(session.paint.layout().view, view);
+        assert_eq!(session.paint.hit(top_left), Some(Hit::Canvas));
+        assert_eq!(session.paint.hit(polygon), Some(Hit::Tool(Tool::Polygon)));
+
+        let bar = session.paint.layout().textbar;
+        click(&mut session, bar.x + 122, bar.y + 8, false);
+        click(
+            &mut session,
+            bar.x + 124,
+            bar.bottom() + 2 + 20 * 7 + 8,
+            false,
+        );
+        assert_eq!(session.paint.editor.text_style.size, 24);
+        assert_eq!(session.paint.layout().view, view);
+
+        click(&mut session, polygon.x, polygon.y, false);
+        assert_eq!(session.paint.editor.tool, Tool::Polygon);
+        assert_eq!(session.paint.layout().view, view);
+    }
 
     #[test]
     fn drawing_uses_window_coordinates_and_produces_a_png() {
@@ -193,7 +230,7 @@ mod tests {
         session
             .paint
             .editor
-            .set_tool(crate::editor::Tool::Polygon, &mut session.paint.fonts);
+            .set_tool(Tool::Polygon, &mut session.paint.fonts);
         session.paint.editor.fill_mode = crate::raster::FillMode::Solid;
         session.render();
 
