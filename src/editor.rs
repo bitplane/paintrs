@@ -493,6 +493,15 @@ impl Editor {
         self.prior_tool = self.tool;
         self.tool = tool;
     }
+
+    pub fn restore_previous_tool(&mut self) {
+        self.tool = if self.prior_tool == self.tool {
+            Tool::Pencil
+        } else {
+            self.prior_tool
+        };
+    }
+
     pub fn settle(&mut self, fonts: &mut Fonts) {
         self.commit_selection();
         self.finish_drawing(fonts);
@@ -866,11 +875,7 @@ impl Editor {
             }
             Tool::Picker => {
                 self.set_color(self.doc.bitmap.get(at), right);
-                self.tool = if self.prior_tool == Tool::Picker {
-                    Tool::Pencil
-                } else {
-                    self.prior_tool
-                };
+                self.restore_previous_tool();
             }
             Tool::Pencil | Tool::Eraser | Tool::Brush | Tool::Spray => {
                 self.record();

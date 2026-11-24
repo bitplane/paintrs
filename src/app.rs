@@ -1219,6 +1219,7 @@ impl Paint {
             Hit::Magnify(n) => {
                 self.preferred_zoom = n.max(2);
                 self.change_zoom(n, None, None);
+                self.editor.restore_previous_tool();
             }
             Hit::Opaque(on) => self.editor.opaque = on,
             Hit::FontFamily => self.font_menu = (self.font_menu != Some(false)).then_some(false),

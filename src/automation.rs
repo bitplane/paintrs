@@ -298,6 +298,21 @@ mod tests {
     }
 
     #[test]
+    fn zoom_option_restores_the_previous_drawing_tool() {
+        let mut session = Session::new(1000, 700).unwrap();
+        click(&mut session, 52, 124, false);
+        assert_eq!(session.paint.editor.tool, Tool::Zoom);
+        click(&mut session, 35, 306, false);
+        assert_eq!(session.paint.zoom, 2);
+        assert_eq!(session.paint.editor.tool, Tool::Pencil);
+
+        let point = session.paint.pixel(p(400, 250));
+        click(&mut session, 400, 250, false);
+        assert_eq!(session.paint.zoom, 2);
+        assert_eq!(session.paint.editor.bitmap().get(point), BLACK);
+    }
+
+    #[test]
     fn drawing_uses_window_coordinates_and_produces_a_png() {
         let mut session = Session::new(1000, 700).unwrap();
         assert!(!session.paint.enabled(Command::Open));
