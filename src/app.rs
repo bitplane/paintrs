@@ -1130,6 +1130,9 @@ impl Paint {
                     && now.duration_since(before) < Duration::from_millis(380)
                     && (a.x - q.x).abs() <= 5
                     && (a.y - q.y).abs() <= 5
+                    && (hit != Hit::Canvas
+                        || self.editor.tool != Tool::Polygon
+                        || self.pixel(a) == self.pixel(q))
             })
         });
         self.last_click = if explicit_double.is_some() || double {

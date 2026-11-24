@@ -251,6 +251,29 @@ mod tests {
     }
 
     #[test]
+    fn native_polygon_clicks_at_distinct_pixels_do_not_double_click() {
+        let mut session = Session::new(1000, 700).unwrap();
+        click(&mut session, 52, 233, false);
+        let native_click = |session: &mut Session, x, y| {
+            session.move_pointer(x, y);
+            session.button(false, true);
+            session.button(false, false);
+        };
+
+        native_click(&mut session, 172, 130);
+        native_click(&mut session, 176, 134);
+        native_click(&mut session, 270, 180);
+        session.key(Key::Named(NamedKey::Escape), Modifiers::empty());
+        assert!(!session.paint.editor.can_undo());
+
+        native_click(&mut session, 171, 131);
+        native_click(&mut session, 280, 131);
+        native_click(&mut session, 225, 209);
+        native_click(&mut session, 225, 209);
+        assert!(session.paint.editor.can_undo());
+    }
+
+    #[test]
     fn drawing_uses_window_coordinates_and_produces_a_png() {
         let mut session = Session::new(1000, 700).unwrap();
         assert!(!session.paint.enabled(Command::Open));
